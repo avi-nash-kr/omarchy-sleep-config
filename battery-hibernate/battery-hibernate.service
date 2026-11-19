@@ -1,0 +1,7 @@
+[Unit]
+Description=Hibernate when running on battery below 65%
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/battery-hibernate-check

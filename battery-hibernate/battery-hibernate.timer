@@ -1,0 +1,11 @@
+[Unit]
+Description=Check battery level for hibernation
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+AccuracySec=15s
+Unit=battery-hibernate.service
+
+[Install]
+WantedBy=timers.target

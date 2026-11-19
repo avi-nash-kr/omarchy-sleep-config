@@ -39,4 +39,11 @@ PY
 # 4. Start hypridle now and on every login
 systemctl --user enable --now hypridle.service
 
-echo "Done: screensaver 5 min, idle lock disabled, suspend after 15 min."
+# 5. Battery hibernate: hibernate on battery at or below 65%
+sudo install -m 755 "$dir/battery-hibernate/battery-hibernate-check" /usr/local/bin/battery-hibernate-check
+sudo install -m 644 "$dir/battery-hibernate/battery-hibernate.service" /etc/systemd/system/battery-hibernate.service
+sudo install -m 644 "$dir/battery-hibernate/battery-hibernate.timer" /etc/systemd/system/battery-hibernate.timer
+sudo systemctl daemon-reload
+sudo systemctl enable --now battery-hibernate.timer
+
+echo "Done: screensaver 5 min, idle lock disabled, suspend after 15 min, hibernate on battery at 65%."

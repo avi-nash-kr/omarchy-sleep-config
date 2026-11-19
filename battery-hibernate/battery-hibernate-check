@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# Hibernate when running on battery and the charge is at or below 65%.
+# Rearms when AC is connected or the charge rises above the threshold,
+# so resuming from hibernate does not immediately hibernate again.
+set -euo pipefail
+
+threshold=${BATTERY_HIBERNATE_THRESHOLD:-65}
+state_dir=${BATTERY_HIBERNATE_STATE_DIR:-/run/battery-hibernate}
+power_supply=${BATTERY_HIBERNATE_POWER_SUPPLY:-/sys/class/power_supply}
+state_file=$state_dir/state
+dry_run=${BATTERY_HIBERNATE_DRY_RUN:-0}
+
+log() { logger -t battery-hibernate -- "$*"; }
+
+on_ac=0
+capacity=""
+
+for supply in "$power_supply"/*; do
+  [[ -r $supply/type ]] || continue
+  type=$(<"$supply/type")
+  case $type in
+    Mains|USB)
+      if [[ -r $supply/online && $(<"$supply/online") == 1 ]]; then
+        on_ac=1
+      fi
+      ;;
+    Battery)
+      if [[ -r $supply/capacity ]]; then
+        c=$(<"$supply/capacity")
+        if [[ -z $capacity || $c -lt $capacity ]]; then
+          capacity=$c
+        fi
+      fi
+      ;;
+  esac
+done
+
+if [[ -z $capacity ]]; then
+  log "no battery found; nothing to do"
+  exit 0
+fi
+
+mkdir -p "$state_dir"
+state=$(cat "$state_file" 2>/dev/null || echo armed)
+
+if ((on_ac == 1)); then
+  if [[ $state != armed ]]; then
+    echo armed > "$state_file"
+    log "external power connected; rearmed"
+  fi
+  exit 0
+fi
+
+if ((capacity > threshold)); then
+  if [[ $state != armed ]]; then
+    echo armed > "$state_file"
+    log "battery at ${capacity}% (above ${threshold}%); rearmed"
+  fi
+  exit 0
+fi
+
+if [[ $state == triggered ]]; then
+  exit 0
+fi
+
+log "on battery at ${capacity}% (threshold ${threshold}%); hibernating"
+if ((dry_run == 1)); then
+  echo "would hibernate: battery ${capacity}%, external power off"
+  exit 0
+fi
+
+echo triggered > "$state_file"
+if ! systemctl hibernate; then
+  echo armed > "$state_file"
+  log "hibernate failed; rearmed for retry"
+  exit 1
+fi
